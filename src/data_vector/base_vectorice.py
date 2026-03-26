@@ -47,10 +47,7 @@ def db_build_vectorial(chunks_service):
             vector_dbs[service].save_local(f"data_vectors/{service}")
             
         
-    return ({
-                "status": "ok",
-                "services": list(vector_dbs.keys())
-            })
+    return vector_dbs
      
 
 def create_db_vectorial(data):
