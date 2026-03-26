@@ -1,6 +1,7 @@
 import os
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 #import funtions to specific work
@@ -8,6 +9,7 @@ from .preproccesing import preprocess_file as pref
 from .data_vector import base_vectorice as bv
 from .agentes import model
 from .tools import retrieve as rt
+
 
 # Variables globales
 llm=None
@@ -37,6 +39,14 @@ async def lifespan(app: FastAPI):
 
 #creación del servidor
 app = FastAPI(lifespan=lifespan)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 class QuestionUser(BaseModel):
     question: str
     
