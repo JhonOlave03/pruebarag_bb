@@ -8,7 +8,10 @@ Sistema RAG (Retrieval-Augmented Generation) con orquestación por herramientas 
 
 La entrada de preguntas del usuario se realiza desde una **interfaz gráfica (GUI)**, la cual consume el backend de este proyecto por HTTP.
 
----
+# Flujo del proceso
+Usuario → API → Agente → Tool → FAISS → Respuesta
+
+------------------------------
 
 ## 1) Arquitectura general
 
@@ -41,7 +44,7 @@ El backend está construido con FastAPI y se divide en estos módulos:
    - Calcula embeddings (`all-mpnet-base-v2`).
    - Almacena/carga índices FAISS por servicio.
 
----
+------------------------------
 
 ## 2) Flujo end-to-end (con GUI)
 
@@ -60,7 +63,7 @@ El backend está construido con FastAPI y se divide en estos módulos:
 8. El backend devuelve `{ "answer": "..." }`.
 9. La GUI presenta la respuesta al usuario.
 
----
+------------------------------
 
 ## 3) Orquestador técnico
 
@@ -95,7 +98,7 @@ Cada herramienta devuelve texto con:
 - metadatos de origen
 - contenido de chunks relevantes
 
----
+------------------------------
 
 ## 4) Procesamiento RAG técnico
 
@@ -164,7 +167,7 @@ Cada chunk se guarda como `Document` con metadata:
 
 Y devuelve un string consolidado con fuente y contenido de los chunks recuperados.
 
----
+------------------------------
 
 ## 5) Ciclo de vida del backend
 
@@ -181,7 +184,7 @@ Luego expone endpoint:
   - request: `{ "question": "..." }`
   - response: `{ "answer": "..." }`
 
----
+------------------------------
 
 ## 6) Estructura de carpetas
 
@@ -209,7 +212,7 @@ doc/
   rag_processing_flow.md
 ```
 
----
+------------------------------
 
 ## 7) Variables de entorno
 
@@ -219,7 +222,7 @@ Requeridas:
 
 Recomendado usar archivo `.env` en raíz del proyecto.
 
----
+------------------------------
 
 ## 8) Ejecución local
 
@@ -241,7 +244,7 @@ uvicorn src.main:app --reload
 curl -X POST http://127.0.0.1:8000/ -H "Content-Type: application/json" -d '{"question":"¿Qué es Bre-B?"}'
 ```
 
----
+------------------------------
 
 ## 9) Integración con GUI
 
@@ -259,18 +262,129 @@ Buenas prácticas para la GUI:
 - Mostrar errores de red/API de forma amigable.
 - Limpiar/normalizar la pregunta antes de enviarla.
 
----
+------------------------------
 
-## 10) Consideraciones técnicas y límites actuales
+## 10) Justificación de decisiones
+
+- Se optó por el uso de un LLM mediante API debido a limitaciones de hardware local, ya que modelos de gran tamaño no podían ser ejecutados eficientemente en el entorno disponible.
+- El retrieval fue fijado en `k=3` para asegurar la recuperación del contexto necesario que permita al modelo formular una respuesta precisa a la duda, y evitar el uso de información ruidosa.
+- La temperatura fue fijada en 0.5 para generar respuestas realistas.
+- El tamaño de los chunks (chunk_size) es de 250 para tener contextos más precisos, también se ajusta un overlap de 60 para mantener relación entre los datos.
+- Se hace uso del modelo para embbedings all-mpnet-base-v2 debido a su robutez y facilidad de uso.
+
+------------------------------
+
+## 11) Consideraciones técnicas y límites actuales
 
 - El orquestador es iterativo, pero depende de que el LLM respete formato JSON cuando decide usar tools.
 - El retrieval está fijado a `k=3`, sin reranking adicional.
 - La limpieza de texto es básica y puede ampliarse para mejorar precisión.
 - El pipeline genera o reutiliza índices locales FAISS para reducir costo en reinicios.
 
----
+------------------------------
 
-## 11) Diagramas
+## 12) Diagramas
+
+### 12.1 Técnico
 
 - Diagrama de flujo de información del orquestador: `doc/orchestrator_flow.md`
 - Diagrama de procesamiento de datos RAG: `doc/rag_processing_flow.md`
+
+### 12.2 Visuales
+
+- Diagrama de flujo de información del orquestador: `doc/archerator_flow.png`
+- Diagrama de procesamiento de datos RAG: `doc/rag_processing_flow.png`
+
+------------------------------
+
+## 13) Comportamiento interno del agente orquestador al recibir una request:
+
+Input:
+"¿Qué opinan de la sede Suba?"
+
+Proceso:
+→ Razonar si se requiere una o más herramientas
+→ Razonar el número de pasos a dar para solucionar el problema
+→ Actuar:
+  tool: sedes_review_tool
+→ Procesar la salida
+
+Output:
+"La sede Suba presenta opiniones mixtas..."
+
+------------------------------
+
+## 14) Ejemplos configurados en el Prompt del LLM:
+
+    User: What do customers say about the Suba branch?
+    Assistant:
+    {{ "tool": "sedes_review_tool", "tool_input": {{ "question": "reviews about Suba branch" }}}}
+
+    User: Tool result:
+    [reviews content...]
+
+    Assistant:
+    Customers mention that...
+    --------------------------------
+    Example 2 (Multiple questions - step by step):
+
+    User: What do customers say about Suba and what is Bre-B?
+
+    Assistant:
+    {{ "tool": "sedes_review_tool", "tool_input": {{ "question": "reviews about Suba branch" }}}}
+
+    User: Tool result:
+    [reviews content...]
+
+    Assistant:
+    {{"tool": "breb_tool", "tool_input": {{ "question": "What is Bre-B?" }}}}
+
+    User: Tool result:
+    [breb info...]
+
+    Assistant:
+    Customers from Suba mention that...
+    Bre-B is...
+
+    --------------------------------
+    Example 3 (Multi-domain reasoning):
+
+    User: What do customers say about Suba and what savings products are available?
+
+    Assistant:
+    {{"tool": "sedes_review_tool", "tool_input": {{ "question": "reviews about Suba branch" }}}}
+
+    User: Tool result:
+    [reviews...]
+
+    Assistant:
+    {{ "tool": "productos_tool", "tool_input": {{ "question": "savings account products and features" }}}}
+
+    User: Tool result:
+    [products...]
+
+    Assistant:
+    Customers in Suba say...
+    Available savings products include...
+
+------------------------------
+
+## 15) Limitaciones
+
+- No hay memory entre preguntas
+- No hay control de hallucinations
+- Dependencia del formato JSON del LLM
+
+------------------------------
+
+## 16) Algunos funcionamientos no esperados que se ajustaron con las pruebas:
+
+- El modelo entregaba las respuestas en ingles al recibir un párrafo con tres o más preguntas
+- El modelo daba respuestas usando formato JSON  o HTML en lugar de texto plano
+- uso de dos o más herramientas al tiempo
+
+
+## 17) Escalado:
+- Usar Framework de langchaing para reconocimiento automático de las tools o guardar nombres de las tools en una lista y hacer dinámico su reconocimiento
+- Mover la función que detecta si un embedding ya fue guardado al inicio del flujo de procesamiento para evitar hacer calculos innecesarios
+ 

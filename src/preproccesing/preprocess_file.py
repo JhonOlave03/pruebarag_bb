@@ -5,7 +5,7 @@ from langchain_community.document_loaders import PyPDFLoader, TextLoader, Docx2t
 from langchain_core.documents import Document
 
 def identify_services_and_files(path_resources):
-    #pila
+    #turn into pila
     root = [path_resources]
     services_dic = {}
     while root:

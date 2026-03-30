@@ -1,7 +1,7 @@
+import os
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
-import os
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -31,7 +31,7 @@ def create_shunks(data):
                     )
                 )
                 
-
+    #print(chunks_service[service])
     return chunks_service
                      
 def db_build_vectorial(chunks_service):
@@ -45,8 +45,6 @@ def db_build_vectorial(chunks_service):
         else:
             vector_dbs[service] = FAISS.from_documents(docs, embeddings)
             vector_dbs[service].save_local(f"data_vectors/{service}")
-            
-        
     return vector_dbs
      
 

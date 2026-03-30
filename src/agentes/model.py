@@ -1,7 +1,10 @@
 from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from huggingface_hub import InferenceClient
+import logging
 import json
 import os
+
+logger = logging.getLogger(__name__)
 
 
 def created_model():
@@ -19,75 +22,14 @@ def created_model():
 def request_response(modelo, question):
     return modelo.invoke(question)
 
+
 def created_agente(modelo, tools, question):
-#    prompt = f"""
-#     You are an intelligent AI assistant.
-
-#     Your job is to answer user questions by selecting the correct tool based on the user's intent.
-
-#     You have access to the following tools:
-
-#     1. breb_tool
-#     Use this tool for:
-#     - Information about BRE-B
-#     - Payment systems in Colombia
-#     - Regulatory or technical details about Bre-B
-
-#     Input:
-#     {{ "question": "string" }}
-
-#     2. sedes_review_tool
-#     Use this tool for:
-#     - Customer reviews of bank branches
-#     - Questions about specific locations (e.g., Suba, Chapinero, etc.)
-#     - Customer satisfaction or complaints
-
-#     Input:
-#     {{ "question": "string" }}
-
-#     3. productos_tool
-#     Use this tool for:
-#     - Bank products (accounts, features, benefits)
-#     - Interest rates, conditions, services
-
-#     Input:
-#     {{ "question": "string" }}
-
-
-#     IMPORTANT RULES:
-#     - You MUST choose the most relevant tool based on the user question.
-#     - If the question is about a specific domain, use the corresponding tool.
-#     - If needed, you can use more than one tool (step by step).
-#     - If the question involves multiple domains, you may call tools sequentially.
-#     - If you use a tool, respond ONLY in valid JSON:
-#     {{ "tool": "tool_name", "tool_input": {{...}} }}
-
-#     - If you are giving the FINAL answer:
-#     - Respond in plain text
-#     - Do NOT use JSON
-#     - Do NOT mention tools
-
-#     Examples:
-
-#     User: What do customers say about the Suba branch?
-#     Assistant:
-#     {{ "tool": "sedes_review_tool", "tool_input": {{ "question": "reviews about Suba branch" }} }}
-
-#     User: What is Bre-B?
-#     Assistant:
-#     {{ "tool": "breb_tool", "tool_input": {{ "question": "What is Bre-B?" }} }}
-
-#     User: What is the interest rate of the savings account?
-#     Assistant:
-#     {{ "tool": "productos_tool", "tool_input": {{ "question": "interest rate savings account" }} }}
-
-#     User: {question}
-#     Assistant:
-#     """
-    
    prompt = f"""
-        You are an intelligent AI assistant that answers user questions using external tools.
-        Your goal is to decide which tool or tools to use and generate a final answer based ONLY on retrieved information.
+        You are an intelligent AI assistant that 
+        answers user questions using external tools.
+        Your goal is to decide which tool or 
+        tools to use and generate a final answer 
+        based ONLY on retrieved information.
         --------------------------------
         AVAILABLE TOOLS:
 
@@ -155,7 +97,6 @@ def created_agente(modelo, tools, question):
 
         - Never invent information
         - Never answer without using tools (if domain applies)
-        - You can call multiple tools if necessary
         - Stop when the answer is complete
 
         --------------------------------
@@ -228,29 +169,36 @@ def created_agente(modelo, tools, question):
         """ 
    max_step = 0
    while max_step <= 5:
+        logger.info(f"Nuevo ciclo de razonamiento iniciado")
+        logger.info(f"Step {max_step} - Evaluando decisión del modelo")
         max_step = max_step+1
         response = request_response(modelo, prompt)
         content = response.content
+        logger.debug(f"Respuesta cruda del modelo: {content}")
         # parsear JSON
         try:
             content_clean = content.strip()
             start = content_clean.find("{")
             end = content_clean.rfind("}") + 1
-
             if start != -1 and end != -1:
                 json_str = content_clean[start:end]
                 data = json.loads(json_str)
             else:
+                logger.info("Respuesta final generada")
                 return content
-            print(f"[DEBUG] Tool elegida: {data.get('tool')}")
-        except:
-                return content  # respuesta normal
+            # print(f"Data: {data}")
+            logger.debug(f"Tool elegida: {data.get('tool')}")
+        except Exception as e:
+                logger.error(f"Error al parsear JSON: {str(e)}")
+                return content  #respuesta normal
         if "tool" not in data:
             return content
         else:
+            logger.info(f"Tool elegida: {data.get('tool')}")
             if data["tool"] == "breb_tool":
+                logger.info(f"Ejecutando tool: {data['tool']}")
                 retrieve = tools[0].invoke(data["tool_input"]["question"])
-                print(f"Datos Retrieve recuperados:  {retrieve}")
+                logger.debug(f"Datos retrieve recuperados")
                 prompt += f"""
                         Assistant: {content}
                         User: Tool result:
@@ -285,8 +233,9 @@ def created_agente(modelo, tools, question):
                         """    
             
             elif data["tool"] == "sedes_review_tool":
+                logger.info(f"Ejecutando tool: {data['tool']}")
                 retrieve = tools[1].invoke(data["tool_input"]["question"])
-                print(f"Datos Retrieve recuperados:  {retrieve}")
+                logger.debug(f"Datos retrieve recuperados")
                 prompt += f"""
                         Assistant: {content}          
                         User: Tool result:
@@ -319,8 +268,9 @@ def created_agente(modelo, tools, question):
                         """    
                               
             elif data["tool"] == "productos_tool":
+                logger.info(f"Ejecutando tool: {data['tool']}")
                 retrieve = tools[2].invoke(data["tool_input"]["question"])
-                print(f"Datos Retrieve recuperados:  {retrieve}")
+                logger.debug(f"Datos retrieve recuperados")
                 prompt += f"""
                         Assistant: {content}
                         User: Tool result:
@@ -353,7 +303,9 @@ def created_agente(modelo, tools, question):
                         Assistant:
                         """     
             else:
+                logger.info("Tool no valida")
                 return content
+        logger.info("Agente finalizó correctamente")
    return "Max steps reached"
    
 

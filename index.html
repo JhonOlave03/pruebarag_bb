@@ -10,8 +10,6 @@
       font-family: Arial, Helvetica, sans-serif;
       background-color: #F5F7FA;
     }
-
-    /* Header */
     .header {
       background-color: #003A8F;
       color: white;
@@ -19,8 +17,6 @@
       font-size: 18px;
       font-weight: bold;
     }
-
-    /* Chat container */
     .chat-container {
       display: flex;
       flex-direction: column;
@@ -32,14 +28,11 @@
       overflow: hidden;
       box-shadow: 0 4px 10px rgba(0,0,0,0.1);
     }
-
-    /* Messages */
     .messages {
       flex: 1;
       padding: 20px;
       overflow-y: auto;
     }
-
     .message {
       margin-bottom: 15px;
       max-width: 70%;
@@ -61,7 +54,7 @@
       margin-right: auto;
     }
 
-    /* Input */
+    
     .input-container {
       display: flex;
       border-top: 1px solid #ddd;
@@ -94,7 +87,8 @@
 
 <div class="chat-container">
   <div class="header">
-    Asistente Virtual Banco de Bogotá
+    <h2>BogoBank: </h2> Tu asistente virtual
+    
   </div>
 
   <div id="messages" class="messages"></div>
