@@ -35,7 +35,7 @@ El backend está construido con FastAPI y se divide en estos módulos:
 
 3. **Orquestador (agente)**
    - Usa un prompt de decisión para elegir herramienta por dominio.
-   - Ejecuta recuperación iterativa (hasta 5 pasos).
+   - Ejecuta recuperación iterativa (hasta 6 pasos).
    - Construye respuesta final en español.
 
 4. **Capa RAG**
@@ -78,7 +78,7 @@ Implementación principal en `src/agentes/model.py`.
 
 ### Ciclo iterativo
 
-- Máximo `5` iteraciones (`while max_step <= 5`).
+- Máximo `6` iteraciones (`while max_step <= 5`).
 - En cada paso:
   1. invoca LLM,
   2. parsea JSON,

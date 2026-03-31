@@ -30,26 +30,78 @@ def created_agente(modelo, tools, question):
         Your goal is to decide which tool or 
         tools to use and generate a final answer 
         based ONLY on retrieved information.
+
         --------------------------------
         AVAILABLE TOOLS:
+       1. Breb Tool
+        Use it ONLY for:
+        - How the Bre-B system works
+        - Instant payment infrastructure in Colombia
+        - Technical concepts (interoperability, SPBVI, DICE, MOL)
+        - Regulation, public policies, or the role of the Central Bank of Colombia (Banco de la República)
+        - Structural problems of the payment system BEFORE Bre-B
+        - Architecture, technological components, or standards (ISO 20022)
+        - Comparisons of payment systems at the national or international level
 
-        1. breb_tool
-        Use for:
-        - BRE-B system
-        - Payment systems in Colombia
-        - Regulations or technical explanations
+        Typical questions:
+        - What is Bre-B?
+        - How does interoperability work?
+        - What problems existed before Bre-B?
+        - What are DICE or MOL?
 
-        2. sedes_review_tool
-        Use for:
-        - Customer reviews of bank branches
-        - Specific locations (Suba, Chapinero, etc.)
-        - Complaints or satisfaction
+        2. Branch Review Tool
+        Use ONLY for:
+        - Customer opinions, reviews, or perceptions
+        - Subjective evaluations:
+        - Satisfaction
+        - Complaints
+        - Branch experiences
+        - Sentiment-based comparisons (positive/negative)
+        - Unstructured user feedback
 
-        3. productos_tool
-        Use for:
-        - Bank products
-        - Interest rates
-        - Account features and benefits
+        Typical questions:
+        - What do customers say about the Suba branch?
+        - Which branch has the best reviews?
+        - Are there any complaints about customer service?
+
+        3. Products_tool
+        Use ONLY for:
+        - Structured information on the bank's financial products
+        - Specific product features:
+        - Interest rates (APR)
+        - Amounts (minimum, maximum, credit limits)
+        - Specific benefits
+        - Costs (account maintenance fee, commissions)
+        - Coverage (insurance, fraud protection)
+        - Operating limits (withdrawals, transfers)
+        - Comparisons between products based on explicit data
+        - Contractual or functional conditions
+
+        Typical questions:
+        - What is the interest rate?
+        - How many withdrawals are allowed?
+        - What benefits does the Gold card offer?
+        - What is the fraud protection insurance coverage?
+        - Which product is better based on its features?
+
+        IMPORTANT:
+        - ONLY use explicit information from the document
+        - DO NOT infer or fill in missing data
+        
+
+        --------------------------------
+        TOOL SELECTION RULE (CRITICAL):
+
+        - If the question asks for:
+        - Numeric values → productos_tool
+        - Technical/system explanations → breb_tool
+        - Opinions or experiences → sedes_review_tool
+
+        If multiple types appear:
+        - Prioritize in this order:
+        1. productos_tool (exact data)
+        2. breb_tool (technical explanation)
+        3. sedes_review_tool (opinions)
 
         --------------------------------
         DECISION RULES:
@@ -96,7 +148,7 @@ def created_agente(modelo, tools, question):
         IMPORTANT:
 
         - Never invent information
-        - Never answer without using tools (if domain applies)
+        - If sufficient information is already available, generate the final answer.
         - Stop when the answer is complete
 
         --------------------------------
@@ -116,16 +168,16 @@ def created_agente(modelo, tools, question):
         --------------------------------
         Example 2 (Multiple questions - step by step):
 
-        User: What do customers say about Suba and what is Bre-B?
+        User: ¿Qué tarjeta de crédito tiene la menor tasa de interés y Cuál es la sede del banco de Bogotá con más comentarios positivos?
 
         Assistant:
-        {{ "tool": "sedes_review_tool", "tool_input": {{ "question": "reviews about Suba branch" }}}}
+        {{ "tool": "productos_tool", "tool_input": {{ "Qué tarjeta de crédito tiene la menor tasa de interés" }}}}
 
         User: Tool result:
         [reviews content...]
 
         Assistant:
-        {{"tool": "breb_tool", "tool_input": {{ "question": "What is Bre-B?" }}}}
+        {{"tool": "sedes_review_tool", "tool_input": {{ "question": " Cuál es la sede del banco de Bogotá con más comentarios positivos?" }}}}
 
         User: Tool result:
         [breb info...]
@@ -167,11 +219,15 @@ def created_agente(modelo, tools, question):
         User: {question}
         Assistant:
         """ 
+   tool_map = {
+        "breb_tool": tools[0],
+        "sedes_review_tool": tools[1],
+        "productos_tool": tools[2]
+    }
    max_step = 0
    while max_step <= 5:
         logger.info(f"Nuevo ciclo de razonamiento iniciado")
         logger.info(f"Step {max_step} - Evaluando decisión del modelo")
-        max_step = max_step+1
         response = request_response(modelo, prompt)
         content = response.content
         logger.debug(f"Respuesta cruda del modelo: {content}")
@@ -195,9 +251,10 @@ def created_agente(modelo, tools, question):
             return content
         else:
             logger.info(f"Tool elegida: {data.get('tool')}")
-            if data["tool"] == "breb_tool":
-                logger.info(f"Ejecutando tool: {data['tool']}")
-                retrieve = tools[0].invoke(data["tool_input"]["question"])
+            tool_name = data["tool"]
+            if tool_name in tool_map:
+                logger.info(f"Ejecutando tool: {tool_name}")
+                retrieve = tool_map[tool_name].invoke(data["tool_input"]["question"])
                 logger.debug(f"Datos retrieve recuperados")
                 prompt += f"""
                         Assistant: {content}
@@ -205,6 +262,9 @@ def created_agente(modelo, tools, question):
                         {retrieve}
                         CONTEXT:
                         This is retrieved information from a knowledge base.
+                        - You MUST base your answer ONLY on this context.
+                        - If the answer is explicitly present, DO NOT say it is missing.
+                        - Extract exact values when available.
                         IMPORTANT:
                         - You MUST perform ONLY ONE action per response:
                         - EITHER call a tool
@@ -221,6 +281,7 @@ def created_agente(modelo, tools, question):
                         - Solve them step by step
                         - Do NOT answer all at once
                         - Continue solving remaining questions step by step if they exist
+                        - IMPORTANT: Prefer generating a final answer if the retrieved context already contains the answer.
                         
 
                         RULES:
@@ -231,81 +292,11 @@ def created_agente(modelo, tools, question):
 
                         Assistant:
                         """    
-            
-            elif data["tool"] == "sedes_review_tool":
-                logger.info(f"Ejecutando tool: {data['tool']}")
-                retrieve = tools[1].invoke(data["tool_input"]["question"])
-                logger.debug(f"Datos retrieve recuperados")
-                prompt += f"""
-                        Assistant: {content}          
-                        User: Tool result:
-                        {retrieve}
-                        CONTEXT:
-                        This is retrieved information from a knowledge base.
-                        IMPORTANT:
-                        - You MUST perform ONLY ONE action per response:
-                        - EITHER call a tool
-                        - OR generate the final answer
-                        - NEVER do multiple actions in one response
-                        - You MUST call ONLY ONE tool at a time
-                        - Do NOT generate multiple tool calls in a single response
-                        - Do NOT use prior knowledge.
-
-                        DECISION:
-                        - If the information is NOT enough → call another tool (JSON format).
-                        - If the information is enough → generate the final answer in plain text.
-                        - If the user asks multiple questions:
-                        - Solve them step by step
-                        - Do NOT answer all at once
-                        - Continue solving remaining questions step by step if they exist
-
-                        RULES:
-                        - If calling a tool → respond ONLY in JSON.
-                        - If final answer → respond ONLY in plain text.
-                        - Do NOT mix JSON and text.
-
-                        Assistant:
-                        """    
-                              
-            elif data["tool"] == "productos_tool":
-                logger.info(f"Ejecutando tool: {data['tool']}")
-                retrieve = tools[2].invoke(data["tool_input"]["question"])
-                logger.debug(f"Datos retrieve recuperados")
-                prompt += f"""
-                        Assistant: {content}
-                        User: Tool result:
-                        {retrieve}
-                        CONTEXT:
-                        This is retrieved information from a knowledge base.
-                        IMPORTANT:
-                        - You MUST perform ONLY ONE action per response:
-                        - EITHER call a tool
-                        - OR generate the final answer
-                        - NEVER do multiple actions in one response
-                        - You MUST call ONLY ONE tool at a time
-                        - Do NOT generate multiple tool calls in a single response
-                        - Do NOT use prior knowledge.
-
-                        DECISION:
-                        - If the information is NOT enough → call another tool (JSON format).
-                        - If the information is enough → generate the final answer in plain text.
-                        - If the user asks multiple questions:
-                        - Solve them step by step
-                        - Do NOT answer all at once
-                        - Continue solving remaining questions step by step if they exist
-                        
-
-                        RULES:
-                        - If calling a tool → respond ONLY in JSON.
-                        - If final answer → respond ONLY in plain text.
-                        - Do NOT mix JSON and text.
-
-                        Assistant:
-                        """     
             else:
                 logger.info("Tool no valida")
                 return content
-        logger.info("Agente finalizó correctamente")
+        max_step = max_step+1
+        logger.info(f"Agente finalizó el paso {max_step} correctamente")
    return "Max steps reached"
    
 
